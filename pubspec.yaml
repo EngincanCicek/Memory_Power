@@ -32,6 +32,7 @@ dependencies:
     sdk: flutter
   sqflite: ^2.0.0+4
   path_provider: ^2.0.1
+  image_picker: ^0.8.4+4
 
 
   # The following adds the Cupertino Icons font to your application.
@@ -54,7 +55,8 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
+  assets:
+  - assets/note_app_logo_transparent.png
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
@@ -91,3 +93,4 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/custom-fonts/#from-packages
+
