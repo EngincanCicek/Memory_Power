@@ -14,6 +14,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Not Defteri',
+      debugShowCheckedModeBanner: false, // debug banner closed
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
