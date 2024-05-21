@@ -3,6 +3,8 @@ import 'package:image_picker/image_picker.dart';
 import 'note.dart';
 import 'note_database.dart';
 import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class NoteDetailPage extends StatefulWidget {
   final Note note;
@@ -14,11 +16,12 @@ class NoteDetailPage extends StatefulWidget {
 }
 
 class _NoteDetailPageState extends State<NoteDetailPage> {
-  bool _isEditMode = false; // Düzenleme modunu kontrol eden değişken
+  bool _isEditMode = false;
   late TextEditingController _titleController;
   late TextEditingController _descriptionController;
   late Note _currentNote;
-  bool _isImagePickerActive = false; // ImagePicker'ın aktif olup olmadığını kontrol eden değişken
+  bool _isImagePickerActive = false;
+  bool _useTurkishFont = false; // Türkçe font seçimi için eklenen değişken
 
   @override
   void initState() {
@@ -29,8 +32,8 @@ class _NoteDetailPageState extends State<NoteDetailPage> {
   }
 
   Future<void> _pickImage() async {
-    if (_isImagePickerActive) return; // Eğer ImagePicker zaten aktifse yeni bir işlem başlatma
-    _isImagePickerActive = true; // ImagePicker'ın aktif olduğunu işaretle
+    if (_isImagePickerActive) return;
+    _isImagePickerActive = true;
 
     try {
       final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
@@ -45,7 +48,7 @@ class _NoteDetailPageState extends State<NoteDetailPage> {
         });
       }
     } finally {
-      _isImagePickerActive = false; // İşlem tamamlandığında ImagePicker'ın aktif olmadığını işaretle
+      _isImagePickerActive = false;
     }
   }
 
@@ -70,7 +73,6 @@ class _NoteDetailPageState extends State<NoteDetailPage> {
 
   void _removeImage(int index) {
     setState(() {
-      // Resim kaldırma işlemi
       List<String> imagePaths = _currentNote.imagePath!.split(',').toList();
       imagePaths.removeAt(index);
       _currentNote = _currentNote.copyWith(imagePath: imagePaths.join(','));
@@ -95,11 +97,105 @@ class _NoteDetailPageState extends State<NoteDetailPage> {
     await NoteDatabase.instance.update(_currentNote);
   }
 
+  Future<String> askQuestion(String text) async {
+    final response = await http.post(
+      Uri.parse('https://api.openai.com/v1/chat/completions'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer YOUR_API_KEY_HERE', // Geçerli API anahtarınızı burada kullanın
+      },
+      body: json.encode({
+        'model': 'gpt-3.5-turbo',
+        'messages': [
+          {'role': 'system', 'content': 'You are a helpful assistant.'},
+          {'role': 'user', 'content': 'Lütfen aşağıdaki metne dayalı olarak bilgi sorusu oluştur: $text'},
+        ],
+        'max_tokens': 100,
+        'temperature': 0.5,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(utf8.decode(response.bodyBytes));
+      String question = data['choices'][0]['message']['content'].trim();
+      // Gereksiz ifadeleri kaldır
+      if (question.contains('bilgi sorusu oluşturabilirsiniz')) {
+        question = question.replaceAll(RegExp(r'bilgi sorusu oluşturabilirsiniz\.*'), '').trim();
+      }
+      return question;
+    } else {
+      print('Failed response: ${response.body}');
+      throw Exception('Failed to generate question');
+    }
+  }
+
+  void _showQuestionDialog(String question) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Sorunuz'),
+          content: Text(question),
+          actions: [
+            TextButton(
+              child: Text('Tamam'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showLoadingDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 16),
+                Text("Soru oluşturuluyor..."),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _askQuestion() async {
+    try {
+      _showLoadingDialog();
+      final text = _currentNote.description;
+      final question = await askQuestion(text);
+      Navigator.of(context).pop(); // Loading dialogunu kapat
+      _showQuestionDialog(question);
+    } catch (e) {
+      Navigator.of(context).pop(); // Loading dialogunu kapat
+      print(e);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Soru oluşturma işlemi başarısız oldu. Lütfen tekrar deneyin.'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     List<String> imagePaths = _currentNote.imagePath?.split(',').toList() ?? [];
-    // Geçersiz dosya yollarını kaldırma
     imagePaths.removeWhere((path) => !File(path).existsSync());
+
+    TextStyle defaultTextStyle = TextStyle(fontSize: 16, color: Colors.teal[800]);
+    TextStyle turkishFontStyle = TextStyle(fontSize: 16, color: Colors.teal[800], fontFamily: 'NotoSerif'); // Türkçe font stili
 
     return Scaffold(
       appBar: AppBar(
@@ -107,7 +203,7 @@ class _NoteDetailPageState extends State<NoteDetailPage> {
             ? TextField(
           controller: _titleController,
           style: TextStyle(
-            fontSize: 26, // Başlık yazısının boyutunu büyüttük
+            fontSize: 26,
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),
@@ -116,7 +212,7 @@ class _NoteDetailPageState extends State<NoteDetailPage> {
             border: InputBorder.none,
           ),
         )
-            : Text(_currentNote.title, style: TextStyle(fontSize: 26)), // Başlık yazısının boyutunu büyüttük
+            : Text(_currentNote.title, style: TextStyle(fontSize: 26)),
         backgroundColor: Colors.teal,
         actions: [
           if (_isEditMode)
@@ -152,7 +248,7 @@ class _NoteDetailPageState extends State<NoteDetailPage> {
               child: Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start, // Başlık ve açıklama sola yaslı
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (!_isEditMode)
                       Column(
@@ -169,7 +265,7 @@ class _NoteDetailPageState extends State<NoteDetailPage> {
                           SizedBox(height: 16),
                           Text(
                             _currentNote.description,
-                            style: TextStyle(fontSize: 18, color: Colors.teal[800]),
+                            style: _useTurkishFont ? turkishFontStyle : defaultTextStyle, // Türkçe font kullanımı
                           ),
                         ],
                       ),
@@ -192,12 +288,21 @@ class _NoteDetailPageState extends State<NoteDetailPage> {
                           SizedBox(height: 16),
                           TextField(
                             controller: _descriptionController,
-                            style: TextStyle(fontSize: 18, color: Colors.teal[800]),
+                            style: TextStyle(fontSize: 16, color: Colors.teal[800]), // Font boyutunu küçülttüm
                             maxLines: null,
                             decoration: InputDecoration(
                               hintText: 'Açıklama',
                               border: InputBorder.none,
                             ),
+                          ),
+                          SwitchListTile(
+                            title: Text('Türkçe Font Kullan'),
+                            value: _useTurkishFont,
+                            onChanged: (bool value) {
+                              setState(() {
+                                _useTurkishFont = value;
+                              });
+                            },
                           ),
                         ],
                       ),
@@ -207,7 +312,7 @@ class _NoteDetailPageState extends State<NoteDetailPage> {
                         shrinkWrap: true,
                         physics: NeverScrollableScrollPhysics(),
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2, // Görselleri kare olarak düzenle
+                          crossAxisCount: 2,
                           crossAxisSpacing: 8.0,
                           mainAxisSpacing: 8.0,
                         ),
@@ -228,7 +333,7 @@ class _NoteDetailPageState extends State<NoteDetailPage> {
                                     borderRadius: BorderRadius.circular(6.0),
                                     child: Image.file(
                                       File(imagePaths[index]),
-                                      fit: BoxFit.cover, // Görsellerin boşluk kalmadan sığması için cover kullanıldı
+                                      fit: BoxFit.cover,
                                       width: double.infinity,
                                       height: double.infinity,
                                     ),
@@ -262,20 +367,35 @@ class _NoteDetailPageState extends State<NoteDetailPage> {
               ),
             ),
           ),
-          if (_isEditMode || imagePaths.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: ElevatedButton.icon(
-                onPressed: _pickImage,
-                icon: Icon(Icons.image),
-                label: Text('Resim Ekle'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.teal,
-                  foregroundColor: Colors.white,
-                  minimumSize: Size(double.infinity, 50), // Butonun genişliğini ayarla
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center, // "Soru Sor" butonunu ortaladım
+              children: [
+                ElevatedButton(
+                  onPressed: _askQuestion,
+                  child: Text('Soru Sor'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.teal,
+                    foregroundColor: Colors.white,
+                  ),
                 ),
-              ),
+                if (_isEditMode)
+                  SizedBox(width: 16), // Boşluk ekledim
+                if (_isEditMode)
+                  ElevatedButton.icon(
+                    onPressed: _pickImage,
+                    icon: Icon(Icons.image),
+                    label: Text('Resim Ekle'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal,
+                      foregroundColor: Colors.white,
+                      minimumSize: Size(150, 50),
+                    ),
+                  ),
+              ],
             ),
+          ),
         ],
       ),
     );

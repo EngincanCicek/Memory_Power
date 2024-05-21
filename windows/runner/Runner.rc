@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "memory_power" "\0"
+            VALUE "FileDescription", "appjammm" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "memory_power" "\0"
+            VALUE "InternalName", "appjammm" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2024 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "memory_power.exe" "\0"
-            VALUE "ProductName", "memory_power" "\0"
+            VALUE "OriginalFilename", "appjammm.exe" "\0"
+            VALUE "ProductName", "appjammm" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
